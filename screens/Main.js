@@ -11,15 +11,36 @@ import {
 
 const { width: windowWidth, height: windowHeight } = Dimensions.get('window');
 
-const ConversionInput = ({ navigation }) => (
-  <View style={styles.inputContainer}>
+const ConversionInput = ({
+  navigation,
+  apiData,
+  currency,
+  setCurrency,
+  value,
+  onChangeText,
+  disabled,
+}) => (
+  <View
+    style={[
+      styles.inputContainer,
+      {
+        backgroundColor: disabled ? 'rgb(220, 220, 220)' : 'rgb(250, 250, 250)',
+      },
+    ]}
+  >
     <TouchableOpacity
       style={styles.leftInput}
-      onPress={() => navigation.navigate('CurrencySelection')}
+      onPress={() => navigation.navigate('CurrencySelection', { apiData, setCurrency, currency })}
     >
-      <Text style={styles.inputTitle}>USD</Text>
+      <Text style={styles.inputTitle}>{currency}</Text>
     </TouchableOpacity>
-    <TextInput style={styles.input} placeholder="0,00" />
+    <TextInput
+      editable={!disabled}
+      value={value}
+      onChangeText={onChangeText}
+      style={styles.input}
+      placeholder="0,00"
+    />
   </View>
 );
 
@@ -28,27 +49,78 @@ export default class Main extends React.Component {
     super(props);
     this.state = {
       apiData: {},
+      inputCurrencies: ['USD', 'BRL'],
+      firstInput: '',
     };
   }
 
   async componentWillMount() {
     const response = await fetch('https://api.exchangeratesapi.io/latest?base=USD');
     const data = await response.json();
-    this.setState({ apiData: data });
+    const { base, date, rates } = data;
+    const newData = {
+      base,
+      date,
+      rates: Object.entries(rates).map(([key, value]) => ({ currency: key, value })),
+    };
+    this.setState({ apiData: newData });
   }
 
   render() {
     const { navigation } = this.props;
+    const { apiData, inputCurrencies, firstInput } = this.state;
+
+    const [firstCurrency, secondCurrency] = inputCurrencies;
+    let secondInput = '';
+    let firstCurrencyValue = 0;
+    let secondCurrencyValue = 0;
+    let day = '';
+    let month = '';
+    let year = '';
+    if (apiData.rates) {
+      [, year, month, day] = apiData.date.match(/(\d{4})-(\d{2})-(\d{2})/);
+      firstCurrencyValue = apiData.rates.find(({ currency, value }) => currency === firstCurrency)
+        .value;
+      secondCurrencyValue = apiData.rates.find(({ currency, value }) => currency === secondCurrency)
+        .value;
+      if (firstInput !== '') {
+        secondInput = ((Number(firstInput) / firstCurrencyValue) * secondCurrencyValue).toFixed(2);
+      }
+    }
+
     return (
       <View style={styles.container}>
         <View style={styles.iconContainer}>
           <Image style={styles.icon} source={require('../assets/conversion.png')} />
         </View>
         <Text style={styles.title}>Conversor de Moedas</Text>
-        <ConversionInput navigation={navigation} />
-        <ConversionInput navigation={navigation} />
-        <Text style={styles.conversionText}>1 USD = 3,81 BRL em 8 de Julho, 2019</Text>
-        <TouchableOpacity style={styles.bottomButton}>
+        <ConversionInput
+          apiData={apiData}
+          navigation={navigation}
+          currency={firstCurrency}
+          setCurrency={newCurrency =>
+            this.setState({ inputCurrencies: [newCurrency, secondCurrency] })
+          }
+          value={firstInput}
+          onChangeText={newText => this.setState({ firstInput: newText })}
+        />
+        <ConversionInput
+          apiData={apiData}
+          navigation={navigation}
+          currency={secondCurrency}
+          setCurrency={newCurrency =>
+            this.setState({ inputCurrencies: [firstCurrency, newCurrency] })
+          }
+          value={secondInput}
+          disabled
+        />
+        <Text style={styles.conversionText}>{`1 ${firstCurrency} = ${(
+          secondCurrencyValue / firstCurrencyValue
+        ).toFixed(2)} ${secondCurrency} em ${day} de ${month}, ${year}`}</Text>
+        <TouchableOpacity
+          style={styles.bottomButton}
+          onPress={() => this.setState({ inputCurrencies: [secondCurrency, firstCurrency] })}
+        >
           <Image style={styles.bottomButtonIcon} source={require('../assets/rotate.png')} />
           <Text style={styles.bottomButtonText}>Alternar Moedas</Text>
         </TouchableOpacity>
